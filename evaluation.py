@@ -704,6 +704,9 @@ def evaluate(gold, predict, db_dir, etype, kmaps, plug_value, keep_distinct, pro
 
     print_scores(scores, etype, include_turn_acc=include_turn_acc)
 
+    import pickle
+    with open('scores.pkl', 'wb') as handle:
+        pickle.dump(scores, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
 # Rebuild SQL functions for value evaluation
 def rebuild_cond_unit_val(cond_unit):
