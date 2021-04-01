@@ -392,11 +392,11 @@ class Evaluator:
     def eval_partial_match(self, pred, label):
         res = {}
 
-        label_total, pred_total, cnt, cnt_wo_agg = eval_sel(pred, label)
-        acc, rec, f1 = get_scores(cnt, pred_total, label_total)
-        res['select'] = {'acc': acc, 'rec': rec, 'f1': f1,'label_total':label_total,'pred_total':pred_total}
-        acc, rec, f1 = get_scores(cnt_wo_agg, pred_total, label_total)
-        res['select(no AGG)'] = {'acc': acc, 'rec': rec, 'f1': f1,'label_total':label_total,'pred_total':pred_total}
+        # label_total, pred_total, cnt, cnt_wo_agg = eval_sel(pred, label)
+        # acc, rec, f1 = get_scores(cnt, pred_total, label_total)
+        # res['select'] = {'acc': acc, 'rec': rec, 'f1': f1,'label_total':label_total,'pred_total':pred_total}
+        # acc, rec, f1 = get_scores(cnt_wo_agg, pred_total, label_total)
+        # res['select(no AGG)'] = {'acc': acc, 'rec': rec, 'f1': f1,'label_total':label_total,'pred_total':pred_total}
 
         label_total, pred_total, cnt, cnt_wo_agg = eval_where(pred, label)
         acc, rec, f1 = get_scores(cnt, pred_total, label_total)
@@ -452,7 +452,9 @@ def print_scores(scores, etype, include_turn_acc=True):
     levels = ['easy', 'medium', 'hard', 'extra', 'all']
     if include_turn_acc:
         levels.append('joint_all')
-    partial_types = ['select', 'select(no AGG)', 'where', 'where(no OP)', 'group(no Having)',
+    # partial_types = ['select', 'select(no AGG)', 'where', 'where(no OP)', 'group(no Having)',
+    #                  'group', 'order', 'and/or', 'IUEN', 'keywords']
+    partial_types = ['where', 'where(no OP)', 'group(no Having)',
                      'group', 'order', 'and/or', 'IUEN', 'keywords']
 
     print_formated_s("", levels, '{:20}')
@@ -543,7 +545,9 @@ def evaluate(gold, predict, db_dir, etype, kmaps, plug_value, keep_distinct, pro
     turns = ['turn 1', 'turn 2', 'turn 3', 'turn 4', 'turn > 4']
     levels = ['easy', 'medium', 'hard', 'extra', 'all', 'joint_all']
 
-    partial_types = ['select', 'select(no AGG)', 'where', 'where(no OP)', 'group(no Having)',
+    # partial_types = ['select', 'select(no AGG)', 'where', 'where(no OP)', 'group(no Having)',
+    #                  'group', 'order', 'and/or', 'IUEN', 'keywords']
+    partial_types = ['where', 'where(no OP)', 'group(no Having)',
                      'group', 'order', 'and/or', 'IUEN', 'keywords']
     entries = []
     scores = {}
@@ -706,7 +710,7 @@ def evaluate(gold, predict, db_dir, etype, kmaps, plug_value, keep_distinct, pro
 
     import pickle
     with open('scores.pkl', 'wb') as handle:
-        pickle.dump(scores, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        pickle.dump([scores, entries], handle, protocol=pickle.HIGHEST_PROTOCOL)
 
 # Rebuild SQL functions for value evaluation
 def rebuild_cond_unit_val(cond_unit):
