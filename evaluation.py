@@ -26,6 +26,7 @@ import argparse
 
 from process_sql import get_schema, Schema, get_sql
 from exec_eval import eval_exec_match
+from copy import deepcopy
 
 # Flag to disable value evaluation
 DISABLE_VALUE = True
@@ -136,22 +137,93 @@ def eval_where(pred, label):
     cnt = 0
     cnt_wo_agg = 0
 
+    missing_preds = []
     for unit in pred_conds:
         if unit in label_conds:
             cnt += 1
             label_conds.remove(unit)
+        else:
+            missing_preds.append(unit)
         if unit[2] in label_wo_agg:
             cnt_wo_agg += 1
             label_wo_agg.remove(unit[2])
 
-    return label_total, pred_total, cnt, cnt_wo_agg
+    fail_reasons = []
+    for unit_gold in label_conds:
+        reason = []
+        for unit_pred in missing_preds:
+
+            # check for error in agg op 1
+            copy_unit_gold = list(unit_gold)
+            copy_unit_pred = list(unit_pred)
+            copy_unit_gold[1] = None
+            copy_unit_pred[1] = None
+            if copy_unit_gold == copy_unit_pred:
+                reason.append('where_agg_op_1')
+                continue
+
+            # check for error in agg op 2
+            copy_unit_gold = list(unit_gold)
+            copy_unit_pred = list(unit_pred)
+            copy_unit_gold[2] = list(copy_unit_gold[2])
+            copy_unit_pred[2] = list(copy_unit_pred[2])
+            copy_unit_gold[2][1] = list(copy_unit_gold[2][1])
+            copy_unit_pred[2][1] = list(copy_unit_pred[2][1])
+            copy_unit_gold[2][1][0] = None
+            copy_unit_pred[2][1][0] = None
+            if copy_unit_gold == copy_unit_pred:
+                reason.append('where_agg_op_2')
+                continue
+
+            # check for error in agg unit op
+            copy_unit_gold = list(unit_gold)
+            copy_unit_pred = list(unit_pred)
+            copy_unit_gold[2] = list(copy_unit_gold[2])
+            copy_unit_pred[2] = list(copy_unit_pred[2])
+            copy_unit_gold[2][0] = None
+            copy_unit_pred[2][0] = None
+            if copy_unit_gold == copy_unit_pred:
+                reason.append('where_unit_op_2')
+                continue
+
+            # check for error in column anme
+            copy_unit_gold = list(unit_gold)
+            copy_unit_pred = list(unit_pred)
+            copy_unit_gold[2] = list(copy_unit_gold[2])
+            copy_unit_pred[2] = list(copy_unit_pred[2])
+            copy_unit_gold[2][1] = list(copy_unit_gold[2][1])
+            copy_unit_pred[2][1] = list(copy_unit_pred[2][1])
+            copy_unit_gold[2][1][1] = None
+            copy_unit_pred[2][1][1] = None
+            if copy_unit_gold == copy_unit_pred:
+                reason.append('where_column_name')
+                continue
+
+        if reason:
+            fail_reasons.append("+".join(sorted(reason)))
+
+    return label_total, pred_total, cnt, cnt_wo_agg, fail_reasons
 
 
 def eval_group(pred, label):
     pred_cols = [unit[1] for unit in pred['groupBy']]
     label_cols = [unit[1] for unit in label['groupBy']]
+    pred_aggs = [unit[0] for unit in pred['groupBy']]
+    label_aggs = [unit[0] for unit in label['groupBy']]
     pred_total = len(pred_cols)
     label_total = len(label_cols)
+
+    fail_reasons = []
+    if pred_total != label_total:
+        fail_reasons.append('groupBy_diff_n_conds')
+    elif set(pred_cols) != set(label_cols):
+        fail_reasons.append('groupBy_cols')
+
+    if len(pred_aggs) != len(label_aggs):
+        fail_reasons.append('groupBy_diff_n_agg_ops')
+    elif set(pred_aggs) != set(label_aggs):
+        fail_reasons.append('groupBy_agg_ops')
+
     cnt = 0
     pred_cols = [pred.split(".")[1] if "." in pred else pred for pred in pred_cols]
     label_cols = [label.split(".")[1] if "." in label else label for label in label_cols]
@@ -159,7 +231,7 @@ def eval_group(pred, label):
         if col in label_cols:
             cnt += 1
             label_cols.remove(col)
-    return label_total, pred_total, cnt
+    return label_total, pred_total, cnt, fail_reasons
 
 
 def eval_having(pred, label):
@@ -176,7 +248,61 @@ def eval_having(pred, label):
             and pred['having'] == label['having']:
         cnt = 1
 
-    return label_total, pred_total, cnt
+    fail_reasons = []
+    for unit_gold in label['having']:
+        reason = []
+        for unit_pred in pred['having']:
+
+            # check for error in agg op 1
+            copy_unit_gold = list(unit_gold)
+            copy_unit_pred = list(unit_pred)
+            copy_unit_gold[1] = None
+            copy_unit_pred[1] = None
+            if copy_unit_gold == copy_unit_pred:
+                reason.append('having_agg_op_1')
+                continue
+
+            # check for error in agg op 2
+            copy_unit_gold = list(unit_gold)
+            copy_unit_pred = list(unit_pred)
+            copy_unit_gold[2] = list(copy_unit_gold[2])
+            copy_unit_pred[2] = list(copy_unit_pred[2])
+            copy_unit_gold[2][1] = list(copy_unit_gold[2][1])
+            copy_unit_pred[2][1] = list(copy_unit_pred[2][1])
+            copy_unit_gold[2][1][0] = None
+            copy_unit_pred[2][1][0] = None
+            if copy_unit_gold == copy_unit_pred:
+                reason.append('having_agg_op_2')
+                continue
+
+            # check for error in agg unit op
+            copy_unit_gold = list(unit_gold)
+            copy_unit_pred = list(unit_pred)
+            copy_unit_gold[2] = list(copy_unit_gold[2])
+            copy_unit_pred[2] = list(copy_unit_pred[2])
+            copy_unit_gold[2][0] = None
+            copy_unit_pred[2][0] = None
+            if copy_unit_gold == copy_unit_pred:
+                reason.append('having_unit_op_2')
+                continue
+
+            # check for error in column anme
+            copy_unit_gold = list(unit_gold)
+            copy_unit_pred = list(unit_pred)
+            copy_unit_gold[2] = list(copy_unit_gold[2])
+            copy_unit_pred[2] = list(copy_unit_pred[2])
+            copy_unit_gold[2][1] = list(copy_unit_gold[2][1])
+            copy_unit_pred[2][1] = list(copy_unit_pred[2][1])
+            copy_unit_gold[2][1][1] = None
+            copy_unit_pred[2][1][1] = None
+            if copy_unit_gold == copy_unit_pred:
+                reason.append('having_column_name')
+                continue
+
+        if reason:
+            fail_reasons.append("+".join(sorted(reason)))
+
+    return label_total, pred_total, cnt, fail_reasons
 
 
 def eval_order(pred, label):
@@ -188,7 +314,28 @@ def eval_order(pred, label):
     if len(label['orderBy']) > 0 and pred['orderBy'] == label['orderBy'] and \
             ((pred['limit'] is None and label['limit'] is None) or (pred['limit'] is not None and label['limit'] is not None)):
         cnt = 1
-    return label_total, pred_total, cnt
+
+    fail_reasons = []
+    if pred_total > label_total:
+        fail_reasons.append('orderBy_FP')
+    elif pred_total < label_total:
+        fail_reasons.append('orderBy_FN')
+    elif pred_total == 1 and label_total == 1:
+        if label['orderBy'][0] != pred['orderBy'][0]:
+            fail_reasons.append('orderBy_diff_sort')
+        if len(label['orderBy'][1]) != len(pred['orderBy'][1]):
+            fail_reasons.append('orderBy_diff_n_cols')
+        elif len(label['orderBy'][1]) == 1:
+            if label['orderBy'][1][0][0] != pred['orderBy'][1][0][0]:
+                fail_reasons.append('orderBy_unit_op')
+            if label['orderBy'][1][0][0] != pred['orderBy'][1][0][0]:
+                fail_reasons.append('orderBy_unit_op')
+            if label['orderBy'][1][0][1][0] != pred['orderBy'][1][0][1][0]:
+                fail_reasons.append('orderBy_agg_op')
+            if label['orderBy'][1][0][1][0] != pred['orderBy'][1][0][1][0]:
+                fail_reasons.append('orderBy_column_name')
+
+    return label_total, pred_total, cnt, fail_reasons
 
 
 def eval_and_or(pred, label):
@@ -376,8 +523,10 @@ class Evaluator:
             return "extra"
 
     def eval_exact_match(self, pred, label):
-        partial_scores = self.eval_partial_match(pred, label)
+        partial_scores, fail_reasons = self.eval_partial_match(pred, label)
         self.partial_scores = partial_scores
+        self.fail_reasons = fail_reasons
+        self.fail_reasons['from'] = False
 
         for key, score in partial_scores.items():
             if score['f1'] != 1:
@@ -386,6 +535,9 @@ class Evaluator:
         if len(label['from']['table_units']) > 0:
             label_tables = sorted(label['from']['table_units'])
             pred_tables = sorted(pred['from']['table_units'])
+
+            if label_tables != pred_tables:
+                self.fail_reasons['from'] = True
             return label_tables == pred_tables
         return 1
 
@@ -398,27 +550,41 @@ class Evaluator:
         # acc, rec, f1 = get_scores(cnt_wo_agg, pred_total, label_total)
         # res['select(no AGG)'] = {'acc': acc, 'rec': rec, 'f1': f1,'label_total':label_total,'pred_total':pred_total}
 
-        label_total, pred_total, cnt, cnt_wo_agg = eval_where(pred, label)
+        fail_reasons = {}
+        fail_reasons['limit'] = []
+        if label['limit'] != pred['limit']:
+            if label['limit'] is None:
+                fail_reasons['limit'].append('limit_FP')
+            elif pred['limit'] is None:
+                fail_reasons['limit'].append('limit_FN')
+            elif label['limit'] != pred['limit']:
+                fail_reasons['limit'].append('limit_wrong_N')
+
+        label_total, pred_total, cnt, cnt_wo_agg, fail_reasons_where = eval_where(pred, label)
+        fail_reasons['where'] = fail_reasons_where
         acc, rec, f1 = get_scores(cnt, pred_total, label_total)
         res['where'] = {'acc': acc, 'rec': rec, 'f1': f1,'label_total':label_total,'pred_total':pred_total}
         acc, rec, f1 = get_scores(cnt_wo_agg, pred_total, label_total)
         res['where(no OP)'] = {'acc': acc, 'rec': rec, 'f1': f1,'label_total':label_total,'pred_total':pred_total}
 
-        label_total, pred_total, cnt = eval_group(pred, label)
+        label_total, pred_total, cnt, fail_reasons_groupby = eval_group(pred, label)
+        fail_reasons['groupBy'] = fail_reasons_groupby
         acc, rec, f1 = get_scores(cnt, pred_total, label_total)
         res['group(no Having)'] = {'acc': acc, 'rec': rec, 'f1': f1,'label_total':label_total,'pred_total':pred_total}
 
-        label_total, pred_total, cnt = eval_having(pred, label)
+        label_total, pred_total, cnt, fail_reasons_having = eval_having(pred, label)
+        fail_reasons['having'] = fail_reasons_having
         acc, rec, f1 = get_scores(cnt, pred_total, label_total)
         res['group'] = {'acc': acc, 'rec': rec, 'f1': f1,'label_total':label_total,'pred_total':pred_total}
 
-        label_total, pred_total, cnt = eval_order(pred, label)
+        label_total, pred_total, cnt, fail_reasons_orderby = eval_order(pred, label)
+        fail_reasons['orderBy'] = fail_reasons_orderby
         acc, rec, f1 = get_scores(cnt, pred_total, label_total)
         res['order'] = {'acc': acc, 'rec': rec, 'f1': f1,'label_total':label_total,'pred_total':pred_total}
 
         label_total, pred_total, cnt = eval_and_or(pred, label)
         acc, rec, f1 = get_scores(cnt, pred_total, label_total)
-        res['and/or'] = {'acc': acc, 'rec': rec, 'f1': f1,'label_total':label_total,'pred_total':pred_total}
+        res['and/or'] = {'acc': acc, 'rec': rec, 'f1': f1, 'label_total':label_total , 'pred_total':pred_total}
 
         label_total, pred_total, cnt = eval_IUEN(pred, label)
         acc, rec, f1 = get_scores(cnt, pred_total, label_total)
@@ -428,7 +594,7 @@ class Evaluator:
         acc, rec, f1 = get_scores(cnt, pred_total, label_total)
         res['keywords'] = {'acc': acc, 'rec': rec, 'f1': f1,'label_total':label_total,'pred_total':pred_total}
 
-        return res
+        return res, fail_reasons
 
 
 def isValidSQL(sql, db):
@@ -662,7 +828,8 @@ def evaluate(gold, predict, db_dir, etype, kmaps, plug_value, keep_distinct, pro
                     'goldSQL': g_str,
                     'hardness': hardness,
                     'exact': exact_score,
-                    'partial': partial_scores
+                    'partial': partial_scores,
+                    'fail_reasons': evaluator.fail_reasons
                 })
 
         if all(v == 1 for v in turn_scores["exec"]):
