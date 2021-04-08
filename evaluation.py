@@ -829,7 +829,8 @@ def evaluate(gold, predict, db_dir, etype, kmaps, plug_value, keep_distinct, pro
                     'hardness': hardness,
                     'exact': exact_score,
                     'partial': partial_scores,
-                    'fail_reasons': evaluator.fail_reasons
+                    'fail_reasons': evaluator.fail_reasons,
+                    'nr_tables_goldSQL': len(g_sql['from']['table_units'])
                 })
 
         if all(v == 1 for v in turn_scores["exec"]):
